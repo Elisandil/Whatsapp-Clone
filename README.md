@@ -144,7 +144,7 @@ com.whatsappclone/
 └── utils/            # Utility classes
 ```
 
-## 🔧 Configuration
+## Configuration
 
 ### Application Properties
 
@@ -179,7 +179,7 @@ application:
 | `KEYCLOAK_ISSUER_URI` | Keycloak realm issuer URI | `http://localhost:9090/realms/whatsapp-clone` |
 | `FILE_UPLOAD_PATH` | File upload directory | `./uploads` |
 
-## 📡 API Endpoints
+## API Endpoints
 
 ### Authentication
 All endpoints require valid JWT token except WebSocket and documentation endpoints.
