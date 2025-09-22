@@ -8,22 +8,52 @@ target/
 !**/src/test/**/target/
 
 ### Angular ignores ###
+# Compiled output
+/dist
+/tmp
+/out-tsc
+/bazel-out
 
+### Node ###
+/node_modules
+npm-debug.log
+yarn-error.log
+
+### Miscellaneous ###
+/.angular/cache
+.sass-cache/
+/connect.lock
+/coverage
+/libpeerconnection.log
+testem.log
+/typings
 
 ### Config Files ignores ###
 *.yml
 
-
 ## IDEs ##
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
 
 ### STS ###
 .apt_generated
-.classpath
 .factorypath
-.project
 .settings
 .springBeans
 .sts4-cache
+
+### VSCode ###
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.history/*
 
 ### IntelliJ IDEA ###
 .idea
@@ -41,5 +71,6 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
-### VS Code ###
-.vscode/
+# System files
+.DS_Store
+Thumbs.db
