@@ -19,7 +19,8 @@ import lombok.Setter;
 @NamedQuery(name = BlockedUserConstants.IS_USER_BLOCKED,
         query = "SELECT COUNT(bu) > 0 FROM BlockedUser bu WHERE bu.blockerId = :blockerId AND bu.blockedId = :blockedId")
 @NamedQuery(name = BlockedUserConstants.FIND_MUTUAL_BLOCK_STATUS,
-        query = "SELECT bu FROM BlockedUser bu WHERE (bu.blockerId = :userId1 AND bu.blockedId = :userId2) OR (bu.blockerId = :userId2 AND bu.blockedId = :userId1)")
+        query = "SELECT bu FROM BlockedUser bu WHERE (bu.blockerId = :userId1 AND bu.blockedId = :userId2) OR " +
+                "(bu.blockerId = :userId2 AND bu.blockedId = :userId1)")
 public class BlockedUser extends BaseAuditingEntity {
 
     @Id
