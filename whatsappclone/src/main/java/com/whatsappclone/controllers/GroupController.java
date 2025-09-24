@@ -4,6 +4,7 @@ import com.whatsappclone.dtos.requests.GroupRequest;
 import com.whatsappclone.dtos.responses.GroupResponse;
 import com.whatsappclone.dtos.responses.StringResponse;
 import com.whatsappclone.services.GroupService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +20,9 @@ import java.util.List;
 public class GroupController {
     private final GroupService groupService;
 
+    // ------------------- POST METHODS ---------------------------------------
     @PostMapping
+    @Operation(summary = "Create group", description = "Create a new group")
     public ResponseEntity<StringResponse> createGroup(
             @RequestBody GroupRequest request,
             Authentication auth) {
@@ -27,18 +30,21 @@ public class GroupController {
         return ResponseEntity.ok(StringResponse.builder().message(groupId).build());
     }
 
-    @GetMapping
-    public ResponseEntity<List<GroupResponse>> getUserGroups(Authentication auth) {
-        return ResponseEntity.ok(groupService.getUserGroups(auth));
-    }
-
     @PostMapping("/{groupId}/members")
+    @Operation(summary = "Add member (Group)", description = "Add a new member to a target group")
     public ResponseEntity<Void> addMemberToGroup(
             @PathVariable String groupId,
             @RequestParam String userId,
             Authentication auth) {
         groupService.addMemberToGroup(groupId, userId, auth);
         return ResponseEntity.ok().build();
+    }
+
+    // ------------------- GET METHODS ---------------------------------------
+    @GetMapping
+    @Operation(summary = "Get users (Group)", description = "Get all users from the target group")
+    public ResponseEntity<List<GroupResponse>> getUserGroups(Authentication auth) {
+        return ResponseEntity.ok(groupService.getUserGroups(auth));
     }
 }
 

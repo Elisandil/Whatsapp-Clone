@@ -20,6 +20,7 @@ import java.util.List;
 public class BlockedUserController {
     private final BlockedUserService blockedUserService;
 
+    // ------------------- POST METHODS ---------------------------------------
     @PostMapping("/block")
     @Operation(summary = "Block users", description = "Blocking target user")
     public ResponseEntity<String> blockUser(
@@ -29,6 +30,7 @@ public class BlockedUserController {
         return ResponseEntity.ok("User blocked successfully");
     }
 
+    // ------------------- DELETE METHODS ---------------------------------------
     @DeleteMapping("/unblock/{userId}")
     @Operation(summary = "Unblock user", description = "Unblock target user")
     public ResponseEntity<String> unblockUser(
@@ -38,6 +40,7 @@ public class BlockedUserController {
         return ResponseEntity.ok("Unblocked user");
     }
 
+    // ------------------- GET METHODS ---------------------------------------
     @GetMapping
     @Operation(summary = "List of blocked users", description = "List of blocked users")
     public ResponseEntity<List<BlockedUserResponse>> getBlockedUsers(Authentication auth) {

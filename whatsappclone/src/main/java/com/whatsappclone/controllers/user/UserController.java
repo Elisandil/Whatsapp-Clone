@@ -22,6 +22,7 @@ public class UserController {
 
     // ------------------- GET METHODS ---------------------------------------
     @GetMapping
+    @Operation(summary = "Get all users", description = "Get all users, not counting the blocked ones")
     public ResponseEntity<List<UserResponse>> getAllUsers(Authentication auth) {
         return ResponseEntity.ok(userService.getAllUsersExceptSelf(auth));
     }

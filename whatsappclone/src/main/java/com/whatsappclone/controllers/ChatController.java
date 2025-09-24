@@ -3,6 +3,7 @@ package com.whatsappclone.controllers;
 import com.whatsappclone.dtos.responses.ChatResponse;
 import com.whatsappclone.dtos.responses.StringResponse;
 import com.whatsappclone.services.ChatService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +22,7 @@ public class ChatController {
 
     // ------------------- POST METHODS ---------------------------------------
     @PostMapping
+    @Operation(summary = "Create chat", description = "Create a new chat")
     public ResponseEntity<StringResponse> createChat(
             @RequestParam(name = "sender-id") String senderId,
             @RequestParam(name = "receiver-id") String receiverId) {
@@ -33,6 +35,7 @@ public class ChatController {
 
     // ------------------- GET METHODS ---------------------------------------
     @GetMapping
+    @Operation(summary = "Obtain chat by receiver", description = "Obtain chat from a receiver perspective")
     public ResponseEntity<List<ChatResponse>> getChatsByReceiverId(Authentication auth) {
         return ResponseEntity.ok(chatService.getChatsByReceiverId(auth));
     }
