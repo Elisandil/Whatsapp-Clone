@@ -13,37 +13,63 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import static java.io.File.separator;
-import static java.lang.System.currentTimeMillis;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class FileService {
+    private static final String USER_DIRECTORY_PREFIX = "users";
+    private static final String EMPTY_STRING = "";
+    private static final char DOT = '.';
 
     @Value("${application.file.uploads.media-output-path}")
     private String fileUploadPath;
 
     public String saveFile(@NonNull MultipartFile sourceFile, @NonNull String userId) {
-        final String fileUploadSubPath = "users" + separator + userId;
+        final String fileUploadSubPath = buildUserDirectoryPath(userId);
         return uploadFile(sourceFile, fileUploadSubPath);
     }
 
     // -------------------------- PRIVATE METHODS -----------------------------
+
+    private String buildUserDirectoryPath(String userId) {
+        return USER_DIRECTORY_PREFIX + File.separator + userId;
+    }
+
     private String uploadFile(@NonNull MultipartFile sourceFile, @NonNull String fileUploadSubPath) {
-        final String finalUploadPath = fileUploadPath + separator + fileUploadSubPath;
-        File targetFolder = new File(finalUploadPath);
+        final String finalUploadPath = buildFinalUploadPath(fileUploadSubPath);
 
-        if(!targetFolder.exists()) {
-            boolean folderCreated = targetFolder.mkdirs();
-
-            if(!folderCreated) {
-                log.warn("Failed to create folder: {}", targetFolder.getAbsolutePath());
-                return null;
-            }
+        if (!ensureDirectoryExists(finalUploadPath)) {
+            return null;
         }
+        final String targetFilePath = buildTargetFilePath(finalUploadPath, sourceFile);
+        return writeFileToPath(sourceFile, targetFilePath);
+    }
+
+    private String buildFinalUploadPath(String fileUploadSubPath) {
+        return fileUploadPath + File.separator + fileUploadSubPath;
+    }
+
+    private boolean ensureDirectoryExists(String directoryPath) {
+        File targetFolder = new File(directoryPath);
+
+        if (targetFolder.exists()) {
+            return true;
+        }
+        boolean folderCreated = targetFolder.mkdirs();
+
+        if (!folderCreated) {
+            log.warn("Failed to create folder: {}", targetFolder.getAbsolutePath());
+            return false;
+        }
+        return true;
+    }
+
+    private String buildTargetFilePath(String finalUploadPath, MultipartFile sourceFile) {
         final String fileExtension = getFileExtension(sourceFile.getOriginalFilename());
-        String targetFilePath = finalUploadPath + separator + currentTimeMillis() + fileExtension;
+        return finalUploadPath + File.separator + System.currentTimeMillis() + fileExtension;
+    }
+
+    private String writeFileToPath(MultipartFile sourceFile, String targetFilePath) {
         Path targetPath = Paths.get(targetFilePath);
 
         try {
@@ -52,20 +78,24 @@ public class FileService {
             return targetFilePath;
         } catch (IOException ex) {
             log.error("File was not saved", ex);
+            return null;
         }
-        return null;
     }
 
     private String getFileExtension(String originalFilename) {
 
-        if(originalFilename == null || originalFilename.isEmpty()) {
-            return "";
+        if (isNullOrEmpty(originalFilename)) {
+            return EMPTY_STRING;
         }
-        int lastDotIndex = originalFilename.lastIndexOf('.');
+        int lastDotIndex = originalFilename.lastIndexOf(DOT);
 
-        if(lastDotIndex == -1) {
-            return "";
+        if (lastDotIndex == -1) {
+            return EMPTY_STRING;
         }
-        return originalFilename.substring(lastDotIndex + 1).toLowerCase();
+        return DOT + originalFilename.substring(lastDotIndex + 1).toLowerCase();
+    }
+
+    private boolean isNullOrEmpty(String str) {
+        return str == null || str.isEmpty();
     }
 }

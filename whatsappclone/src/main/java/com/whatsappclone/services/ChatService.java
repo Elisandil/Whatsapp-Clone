@@ -12,9 +12,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -26,42 +26,52 @@ public class ChatService {
     @Transactional(readOnly = true)
     public List<ChatResponse> getChatsByReceiverId(Authentication currentUser) {
         final String userId = currentUser.getName();
+        List<ChatResponse> directChats = getDirectChats(userId);
+        List<ChatResponse> groupChats = getGroupChats(userId);
 
-        // Chats 1:1
-        List<ChatResponse> directChats = chatRepository.findChatBySenderId(userId)
-                .stream()
-                .map(c -> chatMapper.toChatResponse(c, userId))
-                .toList();
-
-        // ChatGroup 1:N
-        List<ChatResponse> groupChats = chatRepository.findGroupChatsByUserId(userId)
-                .stream()
-                .map(c -> chatMapper.toChatResponse(c, userId))
-                .toList();
-
-        List<ChatResponse> allChats = new ArrayList<>();
-        allChats.addAll(directChats);
-        allChats.addAll(groupChats);
-
-        return allChats;
+        return Stream.concat(directChats.stream(), groupChats.stream())
+                .collect(Collectors.toList());
     }
 
     public String createChat(String senderId, String receiverId) {
-        Optional<Chat> existingChat = chatRepository.findChatBySenderIdAndReceiverId(senderId, receiverId);
+        return chatRepository.findChatBySenderIdAndReceiverId(senderId, receiverId)
+                .map(Chat::getChatId)
+                .orElseGet(() -> createNewChat(senderId, receiverId));
+    }
 
-        if(existingChat.isPresent()) {
-            return existingChat.get().getChatId();
-        }
-        User sender = userRepository.findUserByPublicId(senderId)
-                .orElseThrow(() -> new EntityNotFoundException("Sender: " + senderId + " not found"));
-        User receiver = userRepository.findUserByPublicId(receiverId)
-                .orElseThrow(() -> new EntityNotFoundException("Receiver: " + receiverId + " not found"));
-        Chat chat = new Chat();
-        chat.setSender(sender);
-        chat.setReceiver(receiver);
+    private List<ChatResponse> getDirectChats(String userId) {
+        return chatRepository.findChatBySenderId(userId)
+                .stream()
+                .map(chat -> chatMapper.toChatResponse(chat, userId))
+                .collect(Collectors.toList());
+    }
 
+    private List<ChatResponse> getGroupChats(String userId) {
+        return chatRepository.findGroupChatsByUserId(userId)
+                .stream()
+                .map(chat -> chatMapper.toChatResponse(chat, userId))
+                .collect(Collectors.toList());
+    }
+
+    private String createNewChat(String senderId, String receiverId) {
+        User sender = findUserByPublicId(senderId, "Sender");
+        User receiver = findUserByPublicId(receiverId, "Receiver");
+
+        Chat chat = buildChat(sender, receiver);
         Chat savedChat = chatRepository.save(chat);
 
         return savedChat.getChatId();
+    }
+
+    private User findUserByPublicId(String publicId, String userType) {
+        return userRepository.findUserByPublicId(publicId)
+                .orElseThrow(() -> new EntityNotFoundException(userType + ": " + publicId + " not found"));
+    }
+
+    private Chat buildChat(User sender, User receiver) {
+        Chat chat = new Chat();
+        chat.setSender(sender);
+        chat.setReceiver(receiver);
+        return chat;
     }
 }

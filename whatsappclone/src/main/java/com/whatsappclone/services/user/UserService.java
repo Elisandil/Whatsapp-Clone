@@ -1,6 +1,7 @@
 package com.whatsappclone.services.user;
 
 import com.whatsappclone.dtos.responses.UserResponse;
+import com.whatsappclone.entities.user.User;
 import com.whatsappclone.mappers.UserMapper;
 import com.whatsappclone.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,16 +17,25 @@ public class UserService {
     private final UserMapper userMapper;
 
     public List<UserResponse> getAllUsersExceptSelf(Authentication authUser) {
-        return userRepository.findAllUsersExceptSelf(authUser.getName())
-                .stream()
-                .map(userMapper::toUserResponse).toList();
+        String currentUserId = extractUserId(authUser);
+        List<User> users = userRepository.findAllUsersExceptSelf(currentUserId);
+        return mapToUserResponses(users);
     }
 
-    // New
     public List<UserResponse> getAllUsersExceptSelfAndBlocked(Authentication authUser) {
-        return userRepository.findAllUsersExceptSelfAndBlocked(authUser.getName())
-                .stream()
-                .map(userMapper::toUserResponse).toList();
+        String currentUserId = extractUserId(authUser);
+        List<User> users = userRepository.findAllUsersExceptSelfAndBlocked(currentUserId);
+        return mapToUserResponses(users);
     }
 
+    // -------------------------- PRIVATE METHODS -----------------------------
+    private String extractUserId(Authentication authUser) {
+        return authUser.getName();
+    }
+
+    private List<UserResponse> mapToUserResponses(List<User> users) {
+        return users.stream()
+                .map(userMapper::toUserResponse)
+                .toList();
+    }
 }

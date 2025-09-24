@@ -5,7 +5,6 @@ import com.whatsappclone.dtos.responses.BlockedUserResponse;
 import com.whatsappclone.entities.user.BlockedUser;
 import com.whatsappclone.mappers.BlockedUserMapper;
 import com.whatsappclone.repositories.BlockedUserRepository;
-import com.whatsappclone.repositories.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -18,42 +17,30 @@ import java.util.List;
 @RequiredArgsConstructor
 public class BlockedUserService {
     private final BlockedUserRepository blockedUserRepository;
-    private final UserRepository userRepository;
     private final BlockedUserMapper blockedUserMapper;
 
     @Transactional
     public void blockUser(Authentication auth, BlockedUserRequest request) {
-        String blockerId = auth.getName();
+        String blockerId = extractUserId(auth);
         String blockedId = request.getUserIdToBlock();
 
-        if (blockerId.equals(blockedId)) {
-            throw new IllegalArgumentException("User cannot block himself");
-        }
+        validateBlockRequest(blockerId, blockedId);
 
-        if (blockedUserRepository.isUserBlocked(blockerId, blockedId)) {
-            throw new IllegalArgumentException("User is already blocked");
-        }
-        BlockedUser blockedUser = new BlockedUser();
-        blockedUser.setBlockerId(blockerId);
-        blockedUser.setBlockedId(blockedId);
-        blockedUser.setReason(request.getReason());
-
+        BlockedUser blockedUser = createBlockedUser(blockerId, blockedId, request.getReason());
         blockedUserRepository.save(blockedUser);
     }
 
     @Transactional
     public void unblockUser(Authentication auth, String userIdToUnblock) {
-        String blockerId = auth.getName();
+        String blockerId = extractUserId(auth);
 
-        BlockedUser blockedUser = blockedUserRepository.findByBlockerIdAndBlockedId(blockerId, userIdToUnblock)
-                .orElseThrow(() -> new EntityNotFoundException("Blocked user not found"));
-
+        BlockedUser blockedUser = findExistingBlock(blockerId, userIdToUnblock);
         blockedUserRepository.delete(blockedUser);
     }
 
     @Transactional(readOnly = true)
     public List<BlockedUserResponse> getBlockedUsers(Authentication auth) {
-        String userId = auth.getName();
+        String userId = extractUserId(auth);
 
         return blockedUserRepository.findBlockedUsersByBlockerId(userId)
                 .stream()
@@ -70,5 +57,42 @@ public class BlockedUserService {
     public boolean areUsersBlocked(String userId1, String userId2) {
         List<BlockedUser> blocks = blockedUserRepository.findMutualBlockStatus(userId1, userId2);
         return !blocks.isEmpty();
+    }
+
+    // -------------------------- PRIVATE METHODS -----------------------------
+    private String extractUserId(Authentication auth) {
+        return auth.getName();
+    }
+
+    private void validateBlockRequest(String blockerId, String blockedId) {
+        validateSelfBlock(blockerId, blockedId);
+        validateDuplicateBlock(blockerId, blockedId);
+    }
+
+    private void validateSelfBlock(String blockerId, String blockedId) {
+
+        if (blockerId.equals(blockedId)) {
+            throw new IllegalArgumentException("User cannot block himself");
+        }
+    }
+
+    private void validateDuplicateBlock(String blockerId, String blockedId) {
+
+        if (blockedUserRepository.isUserBlocked(blockerId, blockedId)) {
+            throw new IllegalArgumentException("User is already blocked");
+        }
+    }
+
+    private BlockedUser createBlockedUser(String blockerId, String blockedId, String reason) {
+        BlockedUser blockedUser = new BlockedUser();
+        blockedUser.setBlockerId(blockerId);
+        blockedUser.setBlockedId(blockedId);
+        blockedUser.setReason(reason);
+        return blockedUser;
+    }
+
+    private BlockedUser findExistingBlock(String blockerId, String userIdToUnblock) {
+        return blockedUserRepository.findByBlockerIdAndBlockedId(blockerId, userIdToUnblock)
+                .orElseThrow(() -> new EntityNotFoundException("Blocked user not found"));
     }
 }

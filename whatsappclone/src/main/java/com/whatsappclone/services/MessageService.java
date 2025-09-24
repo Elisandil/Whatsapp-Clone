@@ -32,82 +32,117 @@ public class MessageService {
     private final NotificationService notificationService;
     private final BlockedUserService blockedUserService;
 
-
     public void saveMessage(MessageRequest request) {
+        validateMessageRequest(request);
 
-        if (blockedUserService.areUsersBlocked(request.getSenderId(), request.getReceiverId())) {
-            throw new IllegalStateException("Cannot send message to blocked user");
-        }
-        Chat chat = chatRepository.findById(request.getChatId())
-                .orElseThrow(() -> new EntityNotFoundException("Chat not found"));
+        Chat chat = findChatById(request.getChatId());
+        Message message = createMessage(request, chat);
 
-        Message msg = new Message();
-        msg.setContent(request.getContent());
-        msg.setChat(chat);
-        msg.setSenderId(request.getSenderId());
-        msg.setReceiverId(request.getReceiverId());
-        msg.setType(request.getType());
-        msg.setState(MessageState.SENT);
+        messageRepository.save(message);
+        updateMessageState(message.getId(), MessageState.DELIVERED);
 
-        messageRepository.save(msg);
-        updateMessageState(msg.getId(), MessageState.DELIVERED);
-
-        Notification notification = Notification.builder()
-                .chatId(chat.getChatId())
-                .msgType(request.getType())
-                .content(request.getContent())
-                .senderId(request.getSenderId())
-                .receiverId(request.getReceiverId())
-                .type(NotificationType.MESSAGE)
-                .chatName(chat.getChatName(request.getSenderId()))
-                .build();
-
-        notificationService.sendNotification(msg.getReceiverId(), notification);
+        sendMessageNotification(request, chat);
     }
 
     public List<MessageResponse> findChatMessages(String chatId) {
         return messageRepository.findMessagesByChatId(chatId)
                 .stream()
-                .map(messageMapper::toMessageResponse).toList();
+                .map(messageMapper::toMessageResponse)
+                .toList();
     }
 
     @Transactional
     public void setMessageToSeen(String chatId, Authentication auth) {
-        Chat chat = chatRepository.findById(chatId).orElseThrow(() -> new EntityNotFoundException("Chat not found"));
-        final String receiverId = getReceiverId(chat, auth);
-        messageRepository.setMessagesToSeenByChat(chatId, MessageState.SEEN);
+        Chat chat = findChatById(chatId);
+        String receiverId = getReceiverId(chat, auth);
+        String senderId = getSenderId(chat, auth);
 
-        Notification notification = Notification.builder()
-                .chatId(chat.getChatId())
-                .senderId(getSenderId(chat, auth))
-                .receiverId(receiverId)
+        messageRepository.setMessagesToSeenByChat(chatId, MessageState.SEEN);
+        sendSeenNotification(chat, senderId, receiverId);
+    }
+
+    public void uploadMediaMessage(String chatId, MultipartFile file, Authentication auth) {
+        Chat chat = findChatById(chatId);
+        String senderId = getSenderId(chat, auth);
+        String receiverId = getReceiverId(chat, auth);
+
+        String filePath = fileService.saveFile(file, senderId);
+        Message message = createMediaMessage(chat, senderId, receiverId, filePath);
+
+        messageRepository.save(message);
+        sendMediaNotification(chat, senderId, receiverId, filePath);
+    }
+
+    public void updateMessageState(Long messageId, MessageState newState) {
+        Message message = findMessageById(messageId);
+
+        if (isValidStateTransition(message.getState(), newState)) {
+            updateMessageStateAndNotify(message, newState);
+        }
+    }
+
+    // ---------------------- PRIVATE METHODS ----------------------------------
+    private void validateMessageRequest(MessageRequest request) {
+
+        if (blockedUserService.areUsersBlocked(request.getSenderId(), request.getReceiverId())) {
+            throw new IllegalStateException("Cannot send message to blocked user");
+        }
+    }
+
+    private Chat findChatById(String chatId) {
+        return chatRepository.findById(chatId)
+                .orElseThrow(() -> new EntityNotFoundException("Chat not found"));
+    }
+
+    private Message findMessageById(Long messageId) {
+        return messageRepository.findById(messageId)
+                .orElseThrow(() -> new EntityNotFoundException("Message not found"));
+    }
+
+    private Message createMessage(MessageRequest request, Chat chat) {
+        Message message = new Message();
+        message.setContent(request.getContent());
+        message.setChat(chat);
+        message.setSenderId(request.getSenderId());
+        message.setReceiverId(request.getReceiverId());
+        message.setType(request.getType());
+        message.setState(MessageState.SENT);
+        return message;
+    }
+
+    private Message createMediaMessage(Chat chat, String senderId, String receiverId, String filePath) {
+        Message message = new Message();
+        message.setChat(chat);
+        message.setSenderId(senderId);
+        message.setReceiverId(receiverId);
+        message.setType(MessageType.IMAGE);
+        message.setState(MessageState.SENT);
+        message.setMediaPath(filePath);
+        return message;
+    }
+
+    private void sendMessageNotification(MessageRequest request, Chat chat) {
+        Notification notification = createNotificationBuilder(chat, request.getSenderId(), request.getReceiverId())
+                .msgType(request.getType())
+                .content(request.getContent())
+                .type(NotificationType.MESSAGE)
+                .chatName(chat.getTargetChatName(request.getSenderId()))
+                .build();
+
+        notificationService.sendNotification(request.getReceiverId(), notification);
+    }
+
+    private void sendSeenNotification(Chat chat, String senderId, String receiverId) {
+        Notification notification = createNotificationBuilder(chat, senderId, receiverId)
                 .type(NotificationType.SEEN)
                 .build();
 
         notificationService.sendNotification(receiverId, notification);
     }
 
-    public void uploadMediaMessage(String chatId, MultipartFile file, Authentication auth) {
-        Chat chat = chatRepository.findById(chatId).orElseThrow(() -> new EntityNotFoundException("Chat not found"));
-        final String senderId = getSenderId(chat, auth);
-        final String receiverId = getReceiverId(chat, auth);
-        final String filePath = fileService.saveFile(file, senderId);
-        Message msg = new Message();
-
-        msg.setChat(chat);
-        msg.setSenderId(senderId);
-        msg.setReceiverId(receiverId);
-        msg.setType(MessageType.IMAGE);
-        msg.setState(MessageState.SENT);
-        msg.setMediaPath(filePath);
-
-        messageRepository.save(msg);
-
-        Notification notification = Notification.builder()
-                .chatId(chat.getChatId())
+    private void sendMediaNotification(Chat chat, String senderId, String receiverId, String filePath) {
+        Notification notification = createNotificationBuilder(chat, senderId, receiverId)
                 .msgType(MessageType.IMAGE)
-                .senderId(senderId)
-                .receiverId(receiverId)
                 .type(NotificationType.IMAGE)
                 .media(FileUtils.readBytesFromFile(filePath))
                 .build();
@@ -115,47 +150,42 @@ public class MessageService {
         notificationService.sendNotification(receiverId, notification);
     }
 
-    // New
-    public void updateMessageState(Long messageId, MessageState newState) {
-        Message message = messageRepository.findById(messageId)
-                .orElseThrow(() -> new EntityNotFoundException("Message not found"));
+    private void updateMessageStateAndNotify(Message message, MessageState newState) {
+        message.setState(newState);
+        messageRepository.save(message);
 
-        if (isValidStateTransition(message.getState(), newState)) {
-            message.setState(newState);
-            messageRepository.save(message);
+        Notification notification = createNotificationBuilder(
+                message.getChat(),
+                message.getReceiverId(),
+                message.getSenderId())
+                .msgType(message.getType())
+                .type(getNotificationTypeForState(newState))
+                .build();
 
-            Notification notification = Notification.builder()
-                    .chatId(message.getChat().getChatId())
-                    .msgType(message.getType())
-                    .senderId(message.getReceiverId())
-                    .receiverId(message.getSenderId())
-                    .type(getNotificationTypeForState(newState))
-                    .build();
-
-            notificationService.sendNotification(message.getSenderId(), notification);
-        }
+        notificationService.sendNotification(message.getSenderId(), notification);
     }
 
+    private Notification.NotificationBuilder createNotificationBuilder(Chat chat, String senderId, String receiverId) {
+        return Notification.builder()
+                .chatId(chat.getChatId())
+                .senderId(senderId)
+                .receiverId(receiverId);
+    }
 
-
-    // ---------------------- PRIVATE METHODS ----------------------------------
     private String getSenderId(Chat chat, Authentication auth) {
-
-        if(chat.getSender().getId().equals(auth.getName())) {
-            return chat.getSender().getId();
-        }
-        return chat.getReceiver().getId();
+        String authId = auth.getName();
+        return chat.getSender().getId().equals(authId)
+                ? chat.getSender().getId()
+                : chat.getReceiver().getId();
     }
 
     private String getReceiverId(Chat chat, Authentication auth) {
-
-        if(chat.getSender().getId().equals(auth.getName())) {
-            return chat.getReceiver().getId();
-        }
-        return chat.getSender().getId();
+        String authId = auth.getName();
+        return chat.getSender().getId().equals(authId)
+                ? chat.getReceiver().getId()
+                : chat.getSender().getId();
     }
 
-    // New
     private boolean isValidStateTransition(MessageState currentState, MessageState newState) {
         return switch (currentState) {
             case SENDING -> newState == MessageState.SENT || newState == MessageState.FAILED;

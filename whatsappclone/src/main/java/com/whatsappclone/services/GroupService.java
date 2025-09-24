@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+
 @Service
 @RequiredArgsConstructor
 public class GroupService {
@@ -28,16 +29,63 @@ public class GroupService {
 
     @Transactional
     public String createGroup(GroupRequest request, Authentication auth) {
-        String creatorId = auth.getName();
+        String creatorId = extractUserId(auth);
+        User creator = findUserByPublicId(creatorId);
+        List<User> members = buildMembersList(request.getMemberIds(), creator);
 
-        User creator = userRepository.findUserByPublicId(creatorId)
-                .orElseThrow(() -> new EntityNotFoundException("Creator not found"));
+        Group group = buildGroup(request, creator, members);
+        Group savedGroup = groupRepository.save(group);
 
-        List<User> members = userRepository.findAllById(request.getMemberIds());
+        createGroupChat(savedGroup);
+
+        return savedGroup.getGroupId();
+    }
+
+    @Transactional(readOnly = true)
+    public List<GroupResponse> getUserGroups(Authentication auth) {
+        String userId = extractUserId(auth);
+        return groupRepository.findGroupsByUserId(userId)
+                .stream()
+                .map(group -> groupMapper.toGroupResponse(group, userId))
+                .toList();
+    }
+
+    @Transactional
+    public void addMemberToGroup(String groupId, String userId, Authentication auth) {
+        String requesterId = extractUserId(auth);
+        Group group = findGroupById(groupId);
+
+        validateAdminPermission(group, requesterId);
+
+        User userToAdd = findUserByPublicId(userId);
+        addUserToGroupIfNotMember(group, userToAdd, userId);
+    }
+
+    // -------------------------- PRIVATE METHODS -----------------------------
+    private String extractUserId(Authentication auth) {
+        return auth.getName();
+    }
+
+    private User findUserByPublicId(String userId) {
+        return userRepository.findUserByPublicId(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found with ID: " + userId));
+    }
+
+    private Group findGroupById(String groupId) {
+        return groupRepository.findById(groupId)
+                .orElseThrow(() -> new EntityNotFoundException("Group not found with ID: " + groupId));
+    }
+
+    private List<User> buildMembersList(List<String> memberIds, User creator) {
+        List<User> members = userRepository.findAllById(memberIds);
 
         if (!members.contains(creator)) {
             members.add(creator);
         }
+        return members;
+    }
+
+    private Group buildGroup(GroupRequest request, User creator, List<User> members) {
         Group group = new Group();
         group.setGroupName(request.getGroupName());
         group.setDescription(request.getDescription());
@@ -45,45 +93,28 @@ public class GroupService {
         group.setMembers(members);
         group.setAdmins(List.of(creator));
 
-        Group savedGroup = groupRepository.save(group);
+        return group;
+    }
 
+    private void createGroupChat(Group group) {
         Chat groupChat = new Chat();
         groupChat.setChatType(ChatType.GROUP);
-        groupChat.setGroup(savedGroup);
+        groupChat.setGroup(group);
         chatRepository.save(groupChat);
-
-        return savedGroup.getGroupId();
     }
 
-    @Transactional(readOnly = true)
-    public List<GroupResponse> getUserGroups(Authentication auth) {
-        String userId = auth.getName();
-        return groupRepository.findGroupsByUserId(userId)
-                .stream()
-                .map(group -> groupMapper.toGroupResponse(group, userId))
-                .toList();
-    }
-
-
-    @Transactional
-    public void addMemberToGroup(String groupId, String userId, Authentication auth) {
-        String requesterId = auth.getName();
-
-        Group group = groupRepository.findById(groupId)
-                .orElseThrow(() -> new EntityNotFoundException("Group not found"));
+    private void validateAdminPermission(Group group, String requesterId) {
 
         if (!group.isAdmin(requesterId)) {
-            throw new SecurityException("Only admins can add members");
+            throw new SecurityException("Only admins can add members to group: " + group.getGroupId());
         }
+    }
 
-        User userToAdd = userRepository.findUserByPublicId(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+    private void addUserToGroupIfNotMember(Group group, User userToAdd, String userId) {
 
         if (!group.isMember(userId)) {
             group.getMembers().add(userToAdd);
             groupRepository.save(group);
         }
     }
-
-
 }

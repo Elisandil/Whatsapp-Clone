@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 
@@ -18,24 +19,34 @@ public class UserSynchronizer {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
 
+
     public void synchronizeWithIdp(Jwt token) {
         log.info("Synchronizing user with idp");
-        getUserEmail(token).ifPresent(email -> {
-            log.info("Synchronizing user with email {}", email);
-            Optional<User> optionalUser = userRepository.findByEmail(email);
-            User user = userMapper.fromTokenAttributes(token.getClaims());
-            optionalUser.ifPresent(value -> user.setId(optionalUser.get().getId()));
 
-            userRepository.save(user);
-        });
+        String userId = token.getSubject();
+        Optional<User> optionalUser = userRepository.findUserByPublicId(userId);
+        User user;
+
+        if (optionalUser.isPresent()) {
+            user = optionalUser.get();
+            updateUserFromToken(user, token.getClaims());
+        } else {
+            user = userMapper.fromTokenAttributes(token.getClaims());
+        }
+        user.setLastSeen(LocalDateTime.now());
+        userRepository.save(user);
     }
 
-    private Optional<String> getUserEmail(Jwt token) {
-        Map<String, Object> attributes = token.getClaims();
+    private void updateUserFromToken(User user, Map<String, Object> claims) {
 
-        if(attributes.containsKey("email")) {
-            return Optional.of(attributes.get("email").toString());
+        if (claims.containsKey("given_name")) {
+            user.setFirstName(claims.get("given_name").toString());
         }
-        return Optional.empty();
+        if (claims.containsKey("family_name")) {
+            user.setLastName(claims.get("family_name").toString());
+        }
+        if (claims.containsKey("email")) {
+            user.setEmail(claims.get("email").toString());
+        }
     }
 }
