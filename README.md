@@ -242,4 +242,4 @@ The application uses Hibernate's `ddl-auto: update`.
 
 ---
 
-**Note**: This is a demonstration project. For production use, ensure proper security configurations, monitoring, and testing procedures are in place.
+**Note**: This is a demonstration project.
