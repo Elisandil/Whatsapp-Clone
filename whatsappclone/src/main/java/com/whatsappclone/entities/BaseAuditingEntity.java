@@ -24,11 +24,10 @@ import java.time.LocalDateTime;
 public class BaseAuditingEntity {
 
     @CreatedDate
-    @Column(name = "created_by", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "created_date", nullable = false, updatable = false)
+    private LocalDateTime createdDate;
 
     @LastModifiedDate
-    @Column(name = "last_modified_at", insertable = false)
-    private LocalDateTime lastModifiedAt;
-
+    @Column(name = "last_modified_date", insertable = false)
+    private LocalDateTime lastModifiedDate;
 }
