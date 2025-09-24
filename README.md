@@ -242,4 +242,4 @@ The application uses Hibernate's `ddl-auto: update`.
 
 ---
 
-**Note**: This is a demonstration project.
+**Note**: This is a learning project.
