@@ -50,7 +50,7 @@ A modern real-time messaging application backend built with Spring Boot, featuri
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Elisandil/Whatsapp-Clone
 cd ./path_to_folder
 ```
 
